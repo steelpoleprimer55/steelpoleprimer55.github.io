@@ -1,0 +1,1084 @@
+<!doctype html>
+<html lang=en>
+
+<head>
+    <meta charset=utf-8>
+    <title>list bands until failure</title>
+    <meta name=description content="inspiried by the game 'list animals until failure', but with bands instead. type in band names, and if you can keep going without repeating or naming a band related to one you've already named, you win!">
+    <meta name=viewport content="width=device-width,interactive-widget=resizes-content">
+    <style>
+
+html {color-scheme: light dark;}
+@media (prefers-color-scheme: light) {
+  html {
+    --background-color: #eee;
+    --foreground-color: #555;
+    --confetti-color: #337;
+    --modal-background-color: #ddd;
+    --urgent-color-1: #e93;
+    --urgent-color-2: #c11;
+    --friendly-color: purple;
+    @media (prefers-contrast: more) {
+        --background-color: white;
+        --foreground-color: #111;
+        --modal-background-color: #eee;
+        --urgent-color-1: #c52;
+    }
+  }
+}
+@media (prefers-color-scheme: dark) {
+  html {
+    --background-color: #555;
+    --foreground-color: #eee;
+    --confetti-color: #99e;
+    --modal-background-color: #666;
+    --urgent-color-1: #e93;
+    --urgent-color-2: #c11;
+    --friendly-color: plum;
+    @media (prefers-contrast: more) {
+        --background-color: #111;
+        --foreground-color: white;
+        --modal-background-color: #333;
+        --confetti-color: #ccf;
+        --friendly-color: lavender;
+    }
+  }
+}
+@media (prefers-contrast: more) {
+    #guessbox {
+        border-style: solid;
+        border-color: var(--foreground-color);
+    }
+}
+
+img { max-width: 100%; }
+
+body {
+    text-align: center;
+    background-color: var(--background-color);
+    color: var(--foreground-color);
+    font-family: -apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Byrose Sans,Oxygen,Ubuntu,Cantarell,Fira Sans,Droid Sans,Helvetica Neue,sans-serif;
+}
+
+h1 {
+    transition: color 1s;
+    &:has(+ p:not(:empty)) { margin-bottom: 0.25em; }
+}
+#subtitle {
+    transition: color 2s;
+    margin-top: 0.25em;
+    font-weight: bold;
+    &:empty { display: none; }
+}
+
+#rules {
+    max-width: 35em;
+    display: inline-block;
+    text-align: left;
+    border-style: solid;
+    border-width: 1px;
+    border-radius: 1em;
+    padding: 0.5em;
+    transform-origin: top center;
+    &[open] {
+        animation-name: wiggle;
+        animation-duration: 0.3s;
+    }
+}
+#rules summary { text-align: center; cursor: default; user-select: none;}
+#rules:not([open]) summary { cursor: help }
+#visualshint {
+    animation-name: textappear;
+    animation-duration: 1s;
+}
+#visualshint { display: none; }
+body.sky #visualshint, body.water #visualshint { display: block; }
+body:not(.daily) #dailyhint { display: none; }
+body:not(.restrictive-daily) #restrictivedailyhint { display: none; }
+
+@keyframes textappear { from { font-size: 0 } }
+
+#timerconfetti {
+    position: relative;
+    display: inline-block;
+    color: var(--confetti-color);
+    font-weight: bold;
+}
+.confetto {
+    position: absolute;
+    transition-property:        top,      left,   opacity, rotate;
+    transition-duration:        1s,       1s,     1s,      1s;
+    transition-timing-function: ease-out, linear, linear,  ease-out;
+    top: -1em; left: 0; opacity: 85%; rotate: 0;
+    pointer-events: none;
+}
+#timer {
+    font-family: monospace;
+    font-size: 1em;
+
+    /* @media (prefers-reduced-motion: no-preference) { */
+        transition-property: font-size;
+        transition-duration: 1s;
+    /*&::after {
+        content: attr(content);
+    } doesn't always trigger repaint so let's just set textcontent instead */ 
+    &[content^="0:1"] {
+        font-size: 2em;
+        color: var(--urgent-color-1);
+    }
+    &[content^="0:0"] {
+        font-size: min(31vw, 62vh);
+        color: var(--urgent-color-2);
+    }
+}
+body:has(input#toasthastebox:checked) #timer {
+    font-family: cursive;
+    color: var(--friendly-color);
+    font-size: 1rem;
+}
+
+#comment {
+    display: block;
+    min-height: 1.3em;
+    padding: 1em;
+}
+.error {
+    color: red;
+    font-family: serif;
+    rotate: -5deg;
+    &::before {
+        content: 'Error';
+        font-size: xx-large;
+        font-weight: bold;
+    }
+    & p:first-child {
+        font-size: small;
+    }
+}
+
+#guessbox { font-size: 16px; }
+#guessbox[disabled] { opacity: 1; } /* Safari workaround (disabled textboxes have low opacity, which ghosts through gameoverscreen) */
+
+#log {
+    text-align: left;
+    max-width: 35em;
+    margin: auto;
+    margin-top: 1em;
+    li {
+        animation-name: bump;
+        animation-duration: 0.1s;
+        transform-origin: left center;
+    }
+}
+.abdicated {
+    list-style-type: circle;
+}
+.abdication-note {
+    font-size: small;
+    font-style: italic;
+    margin-left: 1em;
+}
+
+/* Dailyless challenges are probably haxx but whatever support this too */
+/* Hide time controls for challenges */
+body.challenge .timecontrollabel {
+    input {display:none;}
+    &::after { content: "[Locked]"; }
+}
+/* Hide time controls during play */
+body:has(log li) .timecontrollabel {
+    input {display:none;}
+    &::after { content: "[Locked]"; }
+}
+
+#dailypage {
+    position: absolute;
+    left: 0;
+    @media (width >= 30em) { top: 0; }
+    @media (width < 30em) { bottom: 0; }
+    padding: 1em;
+    & summary {
+        text-align: left;
+        list-style: none;
+        user-select: none;
+        calendar-icon {
+            cursor: pointer;
+            font-size: xx-large;
+            display: inline-block;
+        }
+        h2 { display: none; }
+    }
+    &:not([open]) calendar-icon:hover {scale:1.1;}
+    &[open] {
+        border-right-style: outset;
+        @media (width >= 30em) { border-bottom-style: outset; }
+        @media (width < 30em) { border-top-style: outset; }
+        background-color: var(--modal-background-color);
+        & summary > h2 {
+            display: inline-block;
+            margin-top: 0; margin-bottom: 0;
+            margin-left: 1em;
+        }
+    }
+    & button[disabled] {
+        rotate: 5deg;
+        cursor: not-allowed;
+    }
+    &:has(button[disabled]) {
+        filter: grayscale();
+    }
+}
+
+#settings-page {
+    position: absolute;
+    text-align: right;
+    right: 0;
+    @media (width >= 30em) { top: 0; }
+    @media (width < 30em) { bottom: 0; }
+    padding: 1em;
+    & > summary { list-style: none; }
+    & label {
+        display: block;
+        margin: 0.25em;
+    }
+}
+#gear {
+    display: inline-block;
+    font-size: xx-large;
+    user-select: none;
+    cursor: pointer;
+    transition: rotate 0.2s ease-out;
+    rotate: 0;
+    #settings-page[open] & { rotate: -22.5deg; }
+}
+#settings-page[open] {
+    border-left-style: outset;
+    @media (width >= 30em) { border-bottom-style: outset; }
+    @media (width < 30em) { border-top-style: outset; }
+    background-color: var(--modal-background-color);
+    & summary {
+        margin-bottom: 1em;
+    }
+}
+#settings-page h2 {
+    display: none;
+    position: absolute;
+    left: 1rem;
+    top: 0;
+}
+#settings-page[open] h2 {
+    display: inline;
+}
+body:has(#log li) {
+    #dailypage, #settingspage {
+        display: none;
+    }
+}
+
+#gameoverscreen {
+    display: none;
+    position: absolute;
+    animation: stand .8s;
+    animation-timing-function: cubic-bezier(.18,.89,.33,1.33);
+    background-color: var(--modal-background-color);
+    padding: 1em;
+    left: 0; right: 0; margin-inline: auto;
+    width: fit-content; max-width: 35em;
+    @media (prefers-contrast: more) { border-style: outset; }
+    & summary { user-select: none; }
+}
+body.daily #tryagaintext { display: none; }
+body:not(.daily) #tryagainfromdailytext { display: none; }
+#dailybutton2 {
+    margin: auto;
+    margin-top: 0.5em;
+    &[disabled] { display: none; }
+}
+body.daily #dailybutton2 { display: none; }
+
+#copybutton, #epsybutton {
+    cursor: copy;
+    position: relative; /* for confetti */
+}
+#mistakes, #about {
+    margin-top: 1em;
+    & summary { font-size: small }
+}
+#mistakes {
+    #mistakeslog {
+        text-align: left;
+    }
+    display: none;
+    &:has(li) { display: block; }
+}
+#about {
+    & summary { user-select: none; }
+    &:not([open]) summary { cursor: help; }
+}
+.pic {
+    margin-bottom: 1em;
+    &[open] { margin-bottom: 2em; }
+}
+
+@keyframes bump {
+    0%  {margin-left: 0em;}
+    50% {margin-left: -0.2em;}
+    to  {margin-left: 0em;}
+}
+@keyframes wiggle {
+    0%  {rotate: 0;}
+    25% {rotate: 5deg;}
+    50% {rotate: -2.5deg;}
+    75% {rotate: 1.25deg;}
+    to  {rotate: 0deg;}
+}
+@keyframes throb {
+    0% {scale: 1.2;}
+    to {scale: 1;}
+}
+@keyframes stand {
+    from {rotate: x 90deg;} to {rotate: x 0deg;}
+}
+@keyframes charlie {
+    0% { opacity: 1; scale: 1; }
+    to { opacity: 0; scale: 999; }
+}
+
+#underlay {
+    opacity: 0;
+    position: fixed; left: 0; top: 0; height: 100vh; width: 100vw;
+    transition-property:        background-color, opacity,  filter;
+    transition-duration:        4s,               3s,       2s;
+    transition-timing-function: ease-in-out,      ease-out, ease-out;
+    z-index: -1;
+    & { background-image: url("media/tile_ether.svg"); }
+    & { background-image: url("media/tile_ether.png"); } /* trying nosvg */
+    @media (prefers-color-scheme: dark) {
+        background-color: black;
+        body.sky & { mix-blend-mode: color; }
+    }
+    background-size: 2e3px;
+    animation-name:            background-north-2e3px, background-east-2e3px;
+    animation-duration:        100s,                   calc(pi * e * 10s);
+    animation-iteration-count: infinite,               infinite;
+    animation-timing-function: linear,                 linear;
+}
+@keyframes background-north-2e3px {
+    0% { background-position-y: 2e3px; }
+    to { background-position-y: 0px; }
+}
+@keyframes background-east-2e3px {
+    0% { background-position-x: 0px; }
+    to { background-position-x: 2e3px; }
+}
+@keyframes background-north-8e3px {
+    0% { background-position-y: 8e3px; }
+    to { background-position-y: 0px; }
+}
+@keyframes background-east-8e3px {
+    0% { background-position-x: 8e3px; }
+    to { background-position-x: 2e3px; }
+}
+
+#spider {
+    display: none;
+    position: absolute;
+    left: 5em;
+    top: -4em;
+    text-align: center;
+    width: min-content;
+}
+#spider::before {
+    content: "";
+    height: 100px;
+    display: inline-block;
+    border-left: 1px solid black;
+    @media (prefers-color-scheme: dark) { border-color: rgb(250, 255, 250, 60%); }
+    animation-name: abseil;
+    animation-duration: 20s;
+    animation-iteration-count: 1;
+}
+@keyframes abseil {
+    0%  { height: 0; }
+    50% { height: 30vh; }
+    to  { height: 0; }
+}
+
+#bat {
+    display: none;
+    position: absolute;
+    right: 10rem;
+    bottom: 100vh;
+    font-size: xxx-large;
+    transform-origin: bottom;
+    animation-name: roost;
+    animation-duration: 10s;
+}
+@keyframes roost {
+    10% { transform: rotateX(180deg); }
+    90% { transform: rotateX(180deg); }
+    to  { }
+}
+
+snail-race {
+    display: block;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    overflow: hidden;
+    width: 100%;
+}
+#snail {
+    display: none;
+    margin-left: calc(100vw + 1em);
+    font-size: xx-large;
+    animation-name: crawl;
+    animation-duration: 300s;
+    animation-timing-function: ease-out;
+}
+@keyframes crawl { to { margin-left: -1em; } }
+
+body:has(#disablebgbox:checked) #underlay { display: none; }
+
+/* debug */
+body:has(#disablebodybgmovementbox:checked) { animation: none; }
+body:has(#disableunderlaybgmovementbox:checked) #underlay { animation: none; }
+body:has(#disableunderlayfilterbox:checked) #underlay { filter: none; }
+body:has(#disableunderlayopacitybox:checked) #underlay { opacity: none; }
+
+body.invisibletimer #timer { visibility: hidden; }
+
+#fpsBox {
+    &[fps^0] { color: var(--urgent-color-1); }
+    &[fps^1] { color: var(--urgent-color-2); }
+    border: 1px solid;
+    transition: rotate 1s;
+}
+
+    </style>
+    <link rel=stylesheet href=evolution.css>
+    <script src=lower_title_to_id.js></script>
+    <script src=id_to_title.js></script>
+    <script src=challenges.js></script>
+    <script src=mononyms.js></script>
+    <script src=parent.js></script>
+    <script src=eggs.js></script>
+    <script src=pics.js></script>
+    <script src=thanks.js></script>
+    <script>
+
+function newGame() {
+    guessed_ids = []          // ids of animals guessed so far
+    abdicated_ids = new Set() // ids of animals guessed but later overridden by narrower guesses
+    guessed_id_to_li = {}     // guessed animal id → the <li> listing it
+    guessed_descendant = {}   // disallowed parent → its already-guessed descendant
+    guesses = []              // text guesses so far
+    wrong_guesses = []        // see above, but just wrong ones
+    correct_guesses = []      //                     correct ones
+    score = 0;
+    scorespan.innerText = 0;
+    underlay.vibrance = 0;
+    trivia.textContent = '';
+    
+    startTime = undefined;
+    endTime = undefined;
+    log.innerText = '';
+    mistakeslog.innerText = '';
+    guessbox.value = '';
+    guessbox.disabled = null;
+    h1.style = '';
+    subtitle.style = '';
+    gameoverscreen.style = '';
+    visualshint.style = '';
+    underlay.style = '';
+    spider.style = '';
+    bat.style = '';
+    document.body.classList = [];
+    document.body.style = null;
+    dog_index = 0;
+    queuedTrivia = new Set();
+    h1.innerHTML = 'list animals until failure';
+    dailypage.style = '';
+
+    updateDaily();
+    currentChallenge = null;
+    subtitle.innerHTML = '';
+    
+    guessbox.focus()
+
+    if (location.hash=='#showmistakesfornova') mistakes.style='';
+    if (location.hash=='#today' || location.hash=='#enabledaily') document.body.classList.add('dailiesbeta');
+}
+
+// big databases:
+// LOWER_TITLE_TO_ID: lowercase title to id
+// ID_TO_TITLE: id to sentence-case title
+// PARENT: id to parent's id
+
+function* lineage(guess_id) {
+    yield guess_id;
+    var ancestor_id = PARENT[guess_id];
+    while (PARENT[ancestor_id]) {
+        yield ancestor_id;
+        ancestor_id = PARENT[ancestor_id];
+    }
+}
+function debugLineage(guess) {
+    for (let i of lineage(LOWER_TITLE_TO_ID[guess]))console.log(i, ID_TO_TITLE[i]);
+}
+
+function ancestsOrIs(a, b) { return a==b || ancests(a,b); }
+function ancests(possible_ancestor_id, guess_id) {
+    // Whether possible_ancestor_id ancests (is an ancestor of) guess_id.
+    var ancestor_id = PARENT[guess_id];
+    while (PARENT[ancestor_id]) {
+        if (ancestor_id == possible_ancestor_id) { return true; }
+        ancestor_id = PARENT[ancestor_id];
+    }
+}
+
+function anyAncestsOrIs(a, b) { return a.includes(b) || ancests(a,b); }
+function anyAncests(possible_ancestor_ids, guess_id) {
+    // Whether any of possible_ancestor_ids ancests (is an ancestor of) guess_id.
+    var ancestor_id = PARENT[guess_id];
+    while (PARENT[ancestor_id]) {
+        if (possible_ancestor_ids.has(ancestor_id)) { return true; }
+        ancestor_id = PARENT[ancestor_id];
+    }
+}
+
+function triggerAnimation(e, animation) {
+    e.style.animation = null;
+    e.offsetTop;
+    e.style.animation = animation;
+}
+
+function wiggle(e) { triggerAnimation(e, 'wiggle 0.2s'); }
+function throb(e) { triggerAnimation(e, 'throb 0.2s'); }
+
+function choice(l) { return l[Math.floor(Math.random()*l.length)]; }
+
+function appendp(element, text) {
+    let p = document.createElement('p');
+    p.textContent = text;
+    element.append(p);
+    return p;
+}
+
+function reportError(error) {
+    fetch(
+        "https://guestbook.rose.systems/animalserror",
+        {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({e: {e: error.toString(), u: location.toString()}}),
+        }
+    )
+    console.error(error);
+    let errorReport = document.createElement('div');
+    errorReport.classList.add('error');
+    appendp(errorReport, error);
+    if (!guessed_ids.length) {
+        appendp(errorReport, 'Try refreshing?');
+    }
+    comment.append(errorReport);
+}
+
+function tryAttempt() {
+    try {
+        attempt();
+    } catch (error) {
+        reportError(error);
+    }
+}
+
+function attempt() {
+    if (guessbox.value=='!debuglose') endTime=1;
+    var verbatim_guess = guessbox.value;
+    var guess = guessbox.value.trim().toLowerCase().replaceAll("-"," ").replaceAll('’',"'").replaceAll(/ +/g, ' ');
+    if (!guess) { return; }
+    guesses.push(guess);
+    console.log(guess);
+    
+    if (LOWER_TITLE_TO_ID.hasOwnProperty(guess)) {
+        var guess_id = LOWER_TITLE_TO_ID[guess];
+        
+        // It's an animal. But does it conflict with one already guessed?
+        // It could be already guessed itself, or a parent of a guess, or a child of a guess.
+        
+        // Is it already guessed?        
+        if (guessed_ids.includes(guess_id)) {
+            comment.innerText = 'Already said ' + ID_TO_TITLE[guess_id] + '.';
+            var egg_message = equivalence_egg_message(guess, guess_id);
+            if (egg_message) { comment.innerText+=' '+egg_message; }
+            if (egg_message=='NO!') comment.innerText=egg_message // or could check for all-caps?
+            console.log(' ♢ '+comment.innerText);
+            wiggle(guessed_id_to_li[guess_id]);
+            return;
+        }
+
+        // Is it an ancestor of a previous guess?
+        if (guessed_descendant[guess_id]) {
+            comment.innerText = 'Already said more specific animal: ' + ID_TO_TITLE[guessed_descendant[guess_id]];
+            var egg_message = ancestry_egg_message(guess, guessed_descendant[guess_id], guess_id);
+            if (egg_message) { appendp(comment, egg_message); }
+            console.log(' ♢ '+comment.innerText);
+            // wiggle guessed descendants
+            var i = 0;
+            for (prev_guess_id of guessed_ids) {
+                i += 1;
+                if (i>99) { break; }
+                var ancestor_id = PARENT[prev_guess_id];
+                while (PARENT[ancestor_id]) {
+                    if (ancestor_id == guess_id) {
+                        wiggle(guessed_id_to_li[prev_guess_id]);
+                        break;
+                    }
+                    ancestor_id = PARENT[ancestor_id];
+                }
+            }
+            return;
+        }
+        
+        // If this is a challenge run, does the guess conform to the challenge?
+        if (currentChallenge) {
+            let rejection = currentChallenge.rejection(guess_id, guess);
+            if (rejection) {
+                if (ID_TO_TITLE[guess_id].toLowerCase().replaceAll("-"," ") != guess) {
+                    rejection += ' (Understood as '+ ID_TO_TITLE[guess_id] + '.)';
+                }
+                comment.innerText = rejection;
+                wiggle(h1);
+                return;
+            }
+        }
+        
+        // Guess is valid.
+        // But is it a child of a guess? If so, its parent shall abdicate, and no reward shall be dispensed.
+        var ancestor_id = PARENT[guess_id];
+        var reward = true;
+        while (PARENT[ancestor_id]) {
+            if (guessed_ids.includes(ancestor_id) && !abdicated_ids.has(ancestor_id)) {
+                abdicated_ids.add(ancestor_id);
+                var li = guessed_id_to_li[ancestor_id]
+                var s = document.createElement('s');
+                s.append(li.childNodes[0]);
+                li.append(s)
+                var abdication_note = document.createElement('span');
+                abdication_note.classList.add('abdication-note');
+                abdication_note.innerHTML = ' Replaced by more specific ' + ID_TO_TITLE[guess_id];
+                guessed_id_to_li[ancestor_id].append(abdication_note);
+                guessed_id_to_li[ancestor_id].classList.add('abdicated');
+                comment.innerText = 'Replaced vaguer animal: ' + ID_TO_TITLE[ancestor_id]
+                var egg_message = ancestry_egg_message(guess, guess_id, ancestor_id);
+                if (egg_message) { appendp(comment, egg_message); }
+                reward = false;
+                break;
+            }
+            ancestor_id = PARENT[ancestor_id];
+        }
+        
+        if (reward) {
+            score += 1;
+            if (endTime != undefined) { grantIncrement(); }
+            underlay.vibrance += 100;
+        }
+        
+        // Display any easter egg text for this guess.
+        var egg_message = valid_guess_egg_message(guess, guess_id);
+        if (egg_message) {
+            if (comment.innerText) { comment.innerText += "."; } 
+            comment.innerText += ' ' + egg_message;
+        }
+        
+        // Forbid this guess in the future.
+        guessed_ids.push(guess_id);
+        
+        // Forbid this guess's parents.
+        var ancestor_id = PARENT[guess_id];
+        while (PARENT[ancestor_id]) {
+            guessed_descendant[ancestor_id] = guess_id;
+            ancestor_id = PARENT[ancestor_id];
+        }
+        
+        // Create a li for the guess
+        li = document.createElement('li');
+        if (ID_TO_TITLE[guess_id].toLowerCase().replaceAll("-"," ") == guess) {
+            li.innerText = ID_TO_TITLE[guess_id];
+        } else {
+            li.innerText = verbatim_guess + ' → ' + ID_TO_TITLE[guess_id];
+        }
+        guessed_id_to_li[guess_id] = li;
+        egg_manipulate_li(li, guess, guess_id);
+        progress_egg();
+        log.prepend(li);
+        correct_guesses.push(guess);
+        
+        // Update UI.
+        guessbox.value='';
+        scorespan.innerText = score;
+        
+        for (word of (guess+' '+ID_TO_TITLE[guess_id]).replace('bird','-').split(/[ -]/)) {
+            if (CSS.supports('color', word) && word!='field' && word!='canvas' && word!='mark' && word!='highlight') {
+                h1.style.color = word;
+                subtitle.style.color = word;
+                break;
+            }
+        }
+    } else {
+        comment.innerText = invalid_guess_egg_message(guess) || "I don't know that animal.";
+        if (wrong_guesses[wrong_guesses.length - 1] != guess) {
+            wrong_guesses.push(guess);
+            let li = document.createElement('li');
+            li.innerText = guess;
+            mistakeslog.append(li);
+        }
+        return;
+    }
+    if (startTime == undefined) {
+        startTime = Date.now();
+        endTime = startTime + (currentChallenge?.duration_s || initial_time_control.value)*1000;
+    }
+    updateTimer();
+}
+
+function uncomment() {
+    comment.textContent='';
+}
+
+function grantIncrement(ms) {
+    increment = currentChallenge?.increment_s || increment_control.value;
+    ms ||= increment*1000;
+    if (!ms) {return;}
+    endTime += ms;
+    summonConfetto('+' + Math.floor(ms/1000), timerconfetti);
+}
+
+function summonConfetto(text, parent) {
+    var confetto = document.createElement('span');
+    confetto.classList.add('confetto');
+    confetto.innerText = text;
+    parent.append(confetto);
+    setTimeout(()=>{confetto.remove()}, 2000);
+    setTimeout(()=>{
+        confetto.style.top = '-5em';
+        confetto.style.left = (Math.random()*4-2) + 'em';
+        confetto.style.opacity = 0;
+        confetto.style.rotate = (Math.random()**2-0.5) + 'rad';
+    },10)
+}
+
+function updateUnderlay() {
+    if (disablebgsaturationbox?.checked) return;
+    underlay.style.opacity = underlay.style.backgroundImage ? score/7 : -1 + (score/50);
+    if (score == 60) { visualshint.style.display = 'block'; }
+    underlay.vibrance = Math.max(0, underlay.vibrance*0.99);
+    underlay.style.filter = 'saturate(' + (1+Math.floor(underlay.vibrance/90)) + ')';
+}
+
+var secondsLeft;
+function updateTimer() {
+    if (startTime == undefined) {
+        initial_time_control.value = Math.max(1, initial_time_control.value);
+        secondsLeft = currentChallenge?.duration_s || initial_time_control.value;
+    } else {
+        let prevSecondsLeft = secondsLeft;
+        secondsLeft = (endTime - Date.now())/1000;
+        if (
+            navigator.vibrate &&
+            (Math.floor(prevSecondsLeft) > Math.floor(secondsLeft)) &&
+            secondsLeft < 9 &&
+            secondsLeft > 0
+        ) {
+            navigator.vibrate(7*Math.floor(9-secondsLeft));
+        }
+    }
+    if (secondsLeft <= 0) {
+        endGame();
+        secondsLeft = 0;
+    }
+    let timerText = Math.floor(secondsLeft/60) + ":" + Math.floor(secondsLeft%60).toString().padStart(2,0);
+    timer.setAttribute('content', timerText);
+    timer.textContent = timerText;
+}
+
+function emojiSummary() {
+    var summary = '';
+    /* var mononymmed_ancestors = new Set(); */
+    for (guessed_id of guessed_ids) {
+        if (abdicated_ids.has(guessed_id)) { continue; }
+        var ancestor_id = guessed_id;
+        while (PARENT[ancestor_id]) {
+            if (MONONYMS[ancestor_id]) {
+                summary += choice(MONONYMS[ancestor_id]);
+                break;
+            }
+            ancestor_id = PARENT[ancestor_id];
+        }
+    }
+    return summary;
+}
+
+DEFAULT_DURATION_S = 60;
+DEFAULT_INCREMENT_S = 6;
+
+function generateShareString() {
+    let timerDisclaimer = '';
+    if (!currentChallenge) timerDisclaimer = (initial_time_control.value!=DEFAULT_DURATION_S || increment_control.value!=DEFAULT_INCREMENT_S) ? '⏱️'+initial_time_control.value+'/'+increment_control.value : '';
+    s = 'https://rose.systems/animalist';
+    if (document.body.classList.contains('daily')) s += '#today';
+    s += '\n' + timerDisclaimer;
+    s += '\n' + (currentChallenge?.attributivizeScore?.() || (score + ' animal'+(score!=1?'s':'')+' listed'));
+    s += '\n' + emojiSummary();
+    return s;
+}
+
+function copyToClipboard(text, confettoTarget) {
+    if (!navigator.clipboard) { summonConfetto('error >~<"', confettoTarget); }
+    return navigator.clipboard.writeText(text)
+        .then(()=>{ summonConfetto('copied!', confettoTarget); })
+        .catch(()=>{ summonConfetto('error >_<"', confettoTarget); });
+}
+
+var thankIndex;
+function cycleThank() {
+    thankIndex ||= score;
+    thankIndex = (thankIndex + 1) % THANKS.length;
+    thank.innerHTML = THANKS[thankIndex];
+}
+
+var shareString;
+function endGame() {
+    if (guessbox.disabled) { return; }
+    fetch(
+        "https://guestbook.rose.systems/animals",
+        {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({guesses:JSON.stringify(guesses),r:{r:document.referrer,c:currentChallenge?.shortname}}),
+        }
+    )
+    guessbox.disabled = true;
+    navigator.vibrate && toasthastebox.checked && navigator.vibrate(999);
+    queue_final_trivia();
+    cycleThank();
+    shareString = generateShareString();
+    copybutton.style.display = navigator.clipboard ? null : 'none';
+    let discordScorePar = currentChallenge ? 5 : 50;
+    discord.style.display = score > discordScorePar ? '' : 'none';
+    gameoverscreen.style.display = 'block';
+    comment.innerText = '';
+    if (currentChallenge?.key) {
+        localStorage['c_'+currentChallenge.key] = currentChallenge.shortname + ' ' + score;
+    }
+}
+
+function load() {
+    newGame();
+    setInterval(updateTimer);
+    setInterval(updateUnderlay, 100);
+    loadSettings();
+    if (location.hash=='#today') {
+        startDaily();
+    }
+    if (showFps) {
+        requestAnimationFrame(measureFps);
+        fpsBox.style.display = 'inline-block';
+    }
+}
+
+function startDaily() {
+    if (localStorage['c_'+daily.key]) { // todo could be a method on daily
+        comment.textContent = "Already attempted today's daily challenge (" + daily.title + ")."; // todo include sharestring
+        return;
+    }
+    startChallenge(daily);
+}
+
+function startChallenge(challenge) {
+    // todo re-Load()? to wipe guesses
+    uncomment();
+    if (!challenge) { alert("error challenge not defined bwehh >.<'"); }
+    challenge.duration_s ||= DEFAULT_DURATION_S;
+    challenge.increment_s ||= DEFAULT_INCREMENT_S;
+    if (!challenge.attributivizeScore) {
+        challenge.noun ||= 'animal';
+        challenge.pluralNoun ||= challenge.noun+'s';
+        challenge.verbed ||= 'listed';
+        challenge.attributivizeScore ||= ()=> score + ' ' + (score==1 ? challenge.noun : challenge.pluralNoun) + ' ' + challenge.verbed;
+    }
+    currentChallenge = challenge;
+    h1.innerHTML = challenge.title;
+    subtitle.innerHTML = challenge.subtitle || '';
+    if (challenge.key) document.body.classList.add('daily');
+    document.body.classList.add('challenge');
+    document.body.classList.add(challenge.shortname);
+    if (challenge.rejection(LOWER_TITLE_TO_ID.tullimonstrum, 'tullimonstrum') || challenge.rejection(LOWER_TITLE_TO_ID.human, 'human')) {
+        document.body.classList.add('restrictive-daily');
+    }
+    dailypage.open = false;
+    
+    throb(h1);
+    if (challenge.duration_s != DEFAULT_DURATION_S) throb(timer);
+}
+
+CONFIG = [
+    'disablebgbox','toasthastebox'
+]
+
+function loadSettings() {
+    for (i of CONFIG) {
+        document.getElementById(i).checked = localStorage['setting_'+i];
+    }
+}
+
+function saveSettings() {
+    for (i of CONFIG) {
+        localStorage['setting_'+i] = document.getElementById(i).checked ? 1 : '';
+    }
+}
+
+averageMspf = null;
+let lastTimestamp;
+showFps = location.hash=='#fps';
+let frameCount = 0;
+let slowness = 0;
+
+function measureFps(timestamp) {
+    lastTimestamp ||= timestamp;
+    let mspf = timestamp - lastTimestamp;
+    if (mspf > 100 && document.hasFocus()) {
+        slowness += Math.min(1000, mspf);
+        console.log('slowness: '+slowness+'/5000');
+        if (slowness > 3000) {
+            fpsBox.style.rotate = '25deg';
+            // Slowness detected. First resort: disable bg movement.
+            if (!disablebodybgmovementbox.checked || !disableunderlaybgmovementbox.checked) {
+                //e();
+                for (box of [disablebodybgmovementbox, disableunderlaybgmovementbox]) {
+                    box.checked = true;
+                    box.parentElement.style.fontWeight = 'bold';
+                    box.parentElement.title = 'automatically enabled due to low detected fps';
+                }
+                //saveSettings();
+            }
+        }
+    } else {
+        slowness = 0;
+    }
+    if (averageMspf == null) averageMspf = mspf;
+    lastTimestamp = timestamp;
+    averageMspf = (averageMspf * 9 + mspf) / 10;
+    requestAnimationFrame(measureFps);
+    frameCount++
+    if (showFps && !(frameCount % 10)) {
+        fps = ~~(1000 / averageMspf);
+        fpsSpan.textContent = fps;
+        fpsBox.setAttribute('fps', (fps+"").padStart(2,0));
+    }
+}
+
+    </script>
+</head>
+
+<body onload=load()>
+    <div id=underlay></div>
+    <noscript>This game requires JavaScript. Or, if you've superior taste, take out a pen and paper and start listing animals.</noscript>
+    <h1 id=h1>list animals until failure</h1>
+    <p id=subtitle></p>
+    
+    <span id=fpsBox style=display:none><span id=fpsSpan>…</span> fps</span>
+    
+    <details id=rules>
+        <summary>List as many animals as you can.</summary>
+        <p><b>Animals must have Wikipedia articles.</b>
+        <p><b>You have limited time, but get more time for each animal listed.</b> When the timer runs out, that's game over. (Time adjustable in settings.)
+        <p><b>No overlapping terms.</b>
+           For example, if you list “bear” and “polar bear”, you get no point (or time bonus) for the latter.
+           But you can still get a point for a second kind of bear. Order doesn't matter.
+        <p id=dailyhint><b>This is a daily challenge.</b><span id=restrictivedailyhint> Not all animals are eligible.</span>
+        <p id=visualshint><b style=color:var(--urgent-color-1)>Ignore the extraneous visuals.</b>
+           Focus on naming animals.
+    </details> 
+    
+    <details id=dailypage>
+        <summary title='Daily challenge'><calendar-icon>🗓️</calendar-icon><h2>Daily challenge</h2></summary>
+        <p id=dailydesc></p>
+        <button id=dailybutton onclick=startChallenge(daily)>TRY DAILY CHALLENGE</button>
+    </details>
+    
+    <details id=settings-page>
+        <summary title=Settings><h2>Settings</h2><span id=gear>⚙️</span></summary>
+        <label class=timecontrollabel>initial time (s): <input type=number size=2 id=initial_time_control min=1 value=60></label>
+        <label class=timecontrollabel>time increment (s): <input type=number size=2 id=increment_control min=0 value=6></label>
+        <label><input type=checkbox id=disablebgbox onchange=saveSettings()></input>disable animated backgrounds</label>
+        <label><input type=checkbox id=toasthastebox onchange=saveSettings()></input>friendlier timer</label>
+
+        <button onclick="initial_time_control.value=60;increment_control.value=6;disablebgbox.checked=0">reset to defaults</button>
+
+        <details style=padding-top:1em;margin-bottom:-1em><summary><small>experimental settings</small></summary>
+            <label><input type=checkbox id=disablebodybgmovementbox onchange=saveSettings()></input>disable body bg movement (clouds/water)</label>
+            <label><input type=checkbox id=disableunderlaybgmovementbox onchange=saveSettings()></input>disable underlay bg movement (colorful turbulence)</label>
+            <label><input type=checkbox id=disablebgsaturationbox onchange=saveSettings()></input>disable bg saturation/opacity changes</label>
+            <!--<label><input type=checkbox id=disableunderlayfilterbox onchange=saveSettings()></input>disable underlay filter (saturate)</label>
+            <label><input type=checkbox id=disableunderlayopacitybox onchange=saveSettings()></input>disable underlay opacity</label>-->
+        </details>
+
+    </details>
+   
+    <p>Score: <span id=scorespan>0</span></p>
+    
+    <div style=height:1.5em>
+        <game-timer id=timer role=timer></game-timer>
+        <div id=timerconfetti></div>
+    </div>
+    
+    <three-dimensional style=perspective:30rem;display:block>
+        <section id=gameoverscreen>
+            <h2>game over</h2>
+            <section id=trivia></section>
+            <button id=copybutton onclick=copyToClipboard(shareString,copybutton)>copy emoji summary</button>
+            <button id=epsybutton onclick=copyToClipboard(log.innerText,epsybutton)>copy list</button>
+            <button id=tryagainbutton onclick=newGame()>
+                <span id=tryagaintext>try again</span>
+                <span id=tryagainfromdailytext>play normal-style</span>
+            </button>
+            <br>
+            <button id=dailybutton2 onclick=newGame();startDaily()>try today's daily challenge</button>
+            <details id=mistakes style=display:none><summary>mistakes</summary>
+                <ul id=mistakeslog></ul>
+                <p>(If they're my fault, check Wikipedia & <a href=https://rose.systems/contact target=_blank>tell me what to fix</a>.)</p>
+            </details>
+            <details id=about onToggle=if(event.newState.at(5)){cycleThank();}><summary>about this game</summary>
+                <p>By <a href=https://rose.systems>Vivian Rose</a>.
+                <p>Uses Wikipedia and Wikidata, plus a lot of hand-tuning. No LLMs involved.
+                <p><a href=https://rose.systems/contact>Contact me</a> with bug reports, questions, suggestions, and praise.
+                <p id=thank style=font-size:small></p>
+                <p id=discord>There's also <a href=https://discord.gg/vTEvrkNunZ>a fanmade Discord server</a>.</p>
+            </details>
+        </section>
+    </three-dimensional>
+
+    <output id=comment for=guessbox></output>
+    <!--<div id=yetanothercontainer style=overflow-x:clip>-->
+    <solar-system>
+        <!--<div id=belt><div id=orbiter><div id=kettle><img id=prey src=media/bird.svg><img id=predator src=media/eagle.svg></div></div></div>-->
+        <input id=guessbox autofocus autocomplete=off onkeydown="if(event.key==`Enter`){tryAttempt()}" oninput=uncomment()>
+    </solar-system>
+    <ul id=log></ul>
+    <!--</div>-->
+    
+    <div id=spider aria-hidden>🕷️</div>
+    <div id=bat aria-hidden>🦇</div>
+    <snail-race><div id=snail aria-hidden>🐌</div></snail-race>
+</body>
+
+<!--that's right, buddy....
+    unquoted tag attributes....
+    autonomous custom element....
+    omission of optional closing tags....
+    named element access on the Window object....
+    why, you ask?
+    because it's in the spec-->
+
+</html>
